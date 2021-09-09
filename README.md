@@ -1,5 +1,6 @@
 # armadila
-**In Progress**
+**In Progress**  
+
 Here's an implementation of ARIMADL model that combines Distributed Lags (DLs) with the regular Auto Regressive Integrated Moving Average (ARMA/ARIMA) model. This is essentially a wrapper for the *auto_arima* functionality of **pmdarima** python library where model selection can be performed on ARMA with distributed lags. 
 
 The expression for ARMA (AR + MA) model is given below:  
