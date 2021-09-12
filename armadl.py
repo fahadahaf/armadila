@@ -10,10 +10,7 @@ class ARMADL:
     def model_selection():
         pass
 
-    def process_distributed_lags():
-        pass
-
-    def estimate_exogenous_vars(exog, k=0, fill_val=0.0):
+    def generate_distributed_lags(exog, k=0, fill_val=0.0):
         """
         Generates distributed lags (DLs) for given exogenous variables.
         Args:
@@ -52,3 +49,6 @@ class ARMADL:
                                                                  fill_val, float) else fill_val(exog[var])
                                                              )
         return final_exog
+
+    def estimate_exogenous_vars():
+        pass
