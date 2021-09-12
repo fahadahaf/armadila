@@ -4,12 +4,20 @@ import pmdarima as pm
 
 
 class ARMADL:
-    def __init__(endog, exog=None):
-        pass
+    def __init__(self, endog, exog=None, dl_param=None, fill_val=0.0):
+        self.endog = endog
+        self.exog = exog
+        self.dl_param = dl_param if not isinstance(
+            dl_param, str) else self.pick_dl_granger_causality_test(self.endog, self.exog)
+        self.fill_val = fill_val
+        if self.dl_param is not None:
+            self.exog = self.generate_distributed_lags(
+                self.exog, k=self.dl_param, fill_val=self.fill_val)
 
-    def model_selection():
-        pass
+    def model_selection(self, strategy='split', train_size=0.8, accumulate_slide_win=False, **kwargs):
+        fit_res = pm.auto_arima(self.endog, X=self.exog, **kwargs)
 
+    @staticmethod
     def generate_distributed_lags(exog, k=0, fill_val=0.0):
         """
         Generates distributed lags (DLs) for given exogenous variables.
@@ -50,5 +58,9 @@ class ARMADL:
                                                              )
         return final_exog
 
-    def estimate_exogenous_vars():
+    @staticmethod
+    def pick_dl_granger_causality_test(endog, exog):
+        pass
+
+    def estimate_exogenous_vars(self):
         pass
