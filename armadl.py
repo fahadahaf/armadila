@@ -13,9 +13,28 @@ class ARMADL:
         if self.dl_param is not None:
             self.exog = self.generate_distributed_lags(
                 self.exog, k=self.dl_param, fill_val=self.fill_val)
+        self.fit_res = []
 
-    def model_selection(self, strategy='split', train_size=0.8, accumulate_slide_win=False, **kwargs):
-        fit_res = pm.auto_arima(self.endog, X=self.exog, **kwargs)
+    def model_selection(self, strategy='split', train_size=0.9, accumulate_slide_win=False, **kwargs):
+        if strategy == 'split':
+            if isinstance(train_size, float):
+                trn_size = int(train_size*len(self.endog))
+            elif isinstance(train_size, int):
+                trn_size = train_size
+            else:
+                raise TypeError(
+                    "train_size can only be a float or an integer!")
+            train_endog = self.endog.iloc[:trn_size]
+            train_exog = self.exog.iloc[:trn_size]
+            test_endog = self.endog.iloc[trn_size:]
+            test_exog = self.exog.iloc[trn_size:]
+            #print(len(train_endog), len(train_exog))
+            fit_res = pm.auto_arima(train_endog, X=train_exog, **kwargs)
+            train_preds = fit_res.predict(n_periods=trn_size, X=train_exog)
+            test_preds = fit_res.predict(
+                n_periods=test_endog.shape[0], X=test_exog)
+            self.fit_res.append(fit_res)
+            return train_endog, train_preds, test_endog, test_preds
 
     @staticmethod
     def generate_distributed_lags(exog, k=0, fill_val=0.0):
@@ -33,6 +52,9 @@ class ARMADL:
                       - A floating point number, eg. 0.0, np.nan, 1.5 etc.
                       - Any summary stat or aggregating function eg. np.mean, np.median (assumes numpy is imported as np).
         """
+        if exog is None:
+            return exog
+
         if not isinstance(exog, pd.DataFrame):
             exog = pd.DataFrame(exog)
 
@@ -52,10 +74,11 @@ class ARMADL:
                 tmp_k = [*range(0, tmp_k+1)]
 
             for lag in tmp_k:
-                final_exog[f'{var}_{lag}'] = exog[var].shift(lag,
-                                                             fill_value=fill_val if isinstance(
-                                                                 fill_val, float) else fill_val(exog[var])
-                                                             )
+                var_name = f'{var}_{lag}' if lag > 0 else var
+                final_exog[var_name] = exog[var].shift(lag,
+                                                       fill_value=fill_val if isinstance(
+                                                           fill_val, float) else fill_val(exog[var])
+                                                       )
         return final_exog
 
     @staticmethod
