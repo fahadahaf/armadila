@@ -1,10 +1,19 @@
 import numpy as np
 import pandas as pd
+import pickle
 import pmdarima as pm
 
 
 class ARMADL:
     def __init__(self, endog, exog=None, dl_param=None, fill_val=0.0):
+        """
+        ARMADL class, ARMA/ARIMA with distributed lags.
+        Args:
+            endog: (pd.Series) the target time series.
+            exog: (pd.DataFrame) Exogenous variable(s).
+            dl_param: (int or dict) Distributed lags parameter, see generate_distributed_lags() for details.
+            fill_val: (float or function) fill values for shifted series, see generate_distributed_lags() for details.
+        """
         self.endog = endog
         self.exog = exog
         self.dl_param = dl_param if not isinstance(
@@ -13,9 +22,33 @@ class ARMADL:
         if self.dl_param is not None:
             self.exog = self.generate_distributed_lags(
                 self.exog, k=self.dl_param, fill_val=self.fill_val)
-        self.fit_res = []
+        self.fit_res = None
+        self.best_params = None
 
-    def model_selection(self, strategy='split', train_size=0.9, accumulate_slide_win=False, **kwargs):
+    def model_selection(self, strategy='split', train_size=0.9, accumulate_slide_win=False, get_results=True, use_pretrained=False, store_model=True, model_path=None, **auto_arima_args):
+        """
+        Model selection with distributed lags, a wrapper for the auto_arima function.
+        Args:
+            strategy: (str) To use regular train/test split for model selection or the sliding window approach (TO-DO). Default: `split`
+            train_size: (int or float) For regular train/test split, size of the train set or fraction of the dataset to use for training.
+                        In the later case, the remaining fraction of data will be used for testing. Default: 0.9
+            accumulate_slide_win: (bool) Whether to use the accumulated sliding window instead of a fixed size (TO-DO). Default: False
+            get_results: (bool) Whether to get the final model selection results. Default: True
+            use_pretrained: (bool) Whether to use pretrained model (post model selection). Default: True
+            store_model: (bool) Whether to store the best model post model selection. Default: True
+            model_path: (str) Path (with filename) for the model to store. Default: None
+            **auto_arima_args: (dict) arguments for the auto_arima function. 
+                               This should include everything except the endogenous and exogenous variable(s).
+        Returns:
+            (tuple): the train and test ground truth and predictions.
+        """
+        self.fit_res = []
+        self.best_params = []
+        if use_pretrained or store_model:
+            if model_path is None:
+                raise TypeError(
+                    "model_path cannot be None if either of use_pretrained or store_model are set to True!")
+
         if strategy == 'split':
             if isinstance(train_size, float):
                 trn_size = int(train_size*len(self.endog))
@@ -29,12 +62,36 @@ class ARMADL:
             test_endog = self.endog.iloc[trn_size:]
             test_exog = self.exog.iloc[trn_size:]
             #print(len(train_endog), len(train_exog))
-            fit_res = pm.auto_arima(train_endog, X=train_exog, **kwargs)
-            train_preds = fit_res.predict(n_periods=trn_size, X=train_exog)
-            test_preds = fit_res.predict(
-                n_periods=test_endog.shape[0], X=test_exog)
-            self.fit_res.append(fit_res)
-            return train_endog, train_preds, test_endog, test_preds
+            if use_pretrained:
+                try:
+                    with open(model_path, 'rb') as f:
+                        fit_res = pickle.load(f)[0]
+                except:
+                    print(
+                        "Cannot load the pretrained model. Set use_pretrained=False to redo the model selection.")
+            else:
+                fit_res = pm.auto_arima(
+                    train_endog, X=train_exog, **auto_arima_args)
+            try:
+                train_preds = fit_res.predict(n_periods=trn_size, X=train_exog)
+                test_preds = fit_res.predict(
+                    n_periods=test_endog.shape[0],
+                    X=test_exog)
+            except:
+                print("Something went wrong! if you're using a pretrained model, make sure the same set of auto_arima parameters are used.")
+            if len(self.fit_res) == 0:
+                self.fit_res.append(fit_res)
+                self.best_params.append(
+                    list(fit_res.order) + [fit_res.seasonal_order[-1]])
+
+            if store_model and use_pretrained == False:
+                with open(model_path, 'wb') as f:
+                    pickle.dump(self.fit_res, f)
+
+            if get_results:
+                return train_endog, train_preds, test_endog, test_preds
+            else:
+                return None
 
     @staticmethod
     def generate_distributed_lags(exog, k=0, fill_val=0.0):
@@ -51,6 +108,8 @@ class ARMADL:
             fill_val: (float or function) After applying lag, how to handle the missing values. Options are:
                       - A floating point number, eg. 0.0, np.nan, 1.5 etc.
                       - Any summary stat or aggregating function eg. np.mean, np.median (assumes numpy is imported as np).
+        Returns:
+            final_exog: (pd.DataFrame) a dataframe of exogenous variables with distributed lags.
         """
         if exog is None:
             return exog
@@ -83,7 +142,15 @@ class ARMADL:
 
     @staticmethod
     def pick_dl_granger_causality_test(endog, exog):
+        """
+        Picks distributed lags for exogenous variables based on granger causality test.
+        **TO-DO**
+        """
         pass
 
     def estimate_exogenous_vars(self):
+        """
+        Estimates exogenous variables when not available at forecast/prediction time.
+        **TO-DO**
+        """
         pass
