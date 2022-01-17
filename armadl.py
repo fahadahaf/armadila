@@ -64,9 +64,9 @@ class ARMADL:
                 raise TypeError(
                     "train_size can only be a float or an integer!")
             train_endog = self.endog.iloc[:trn_size]
-            train_exog = self.exog.iloc[:trn_size]
+            train_exog = None if self.exog is None else self.exog.iloc[:trn_size]
             test_endog = self.endog.iloc[trn_size:]
-            test_exog = self.exog.iloc[trn_size:]
+            test_exog = None if self.exog is None else self.exog.iloc[trn_size:]
             #print(len(train_endog), len(train_exog))
             if use_pretrained:
                 try:
