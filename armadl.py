@@ -3,6 +3,8 @@ import pandas as pd
 import pickle
 import pmdarima as pm
 
+from statsmodels.tsa.stattools import grangercausalitytests
+
 
 class ARMADL:
     def __init__(self, endog, exog=None, dl_param=None, fill_val=0.0):
@@ -141,12 +143,34 @@ class ARMADL:
         return final_exog
 
     @staticmethod
-    def pick_dl_granger_causality_test(endog, exog):
+    def pick_dl_granger_causality_test(endog, exog, maxlag=8, htest='ssr_ftest', verbose=False, lagthresh=8, alpha=0.05):
         """
         Picks distributed lags for exogenous variables based on granger causality test.
-        **TO-DO**
+        Args:
+            endog: (pd.Series) The endogenous data, or target series which is to be forecasted.
+            exog: (pd.DataFrame) The exogenous data.
+            maxlag: (int) Number of lags to consider in the exogenous variable; this is one of the arguments for the Granger Causality test. Default: 8
+            htest: (str) Hypothesis test to consider; this is one of the arguments for the Granger Causality test. Default: 'ssr_ftest'
+            verbose: (boolean) Verbose argument of the Granger Causality test function. Default: False
+            lagthresh: (int) Number of lags threshold; the best lag suggested by the test should be less than or equal to this value. Default: 8
+            alpha: (float) The p-value alpha cutoff to use in the Granger Causality test. Default: 0.05
+        Returns:
+            dict: A dictionary with keys representing the exogenous variable(s) and values as lists, in the following format: [lag_pvalues, all_accepted_lags, best_lag]. 
+                  The best_lag is the suggested lag to use for the corresponding exogenous variable.
+
         """
-        pass
+        exog_res = {}
+        for col in exog.columns:
+            data = pd.DataFrame((endog, exog[col])).T
+            res_dict = grangercausalitytests(data.dropna(), maxlag=maxlag, verbose=verbose)
+            lag_pvals = [res_dict[i][0][htest][1] for i in range(1, maxlag+1)]
+            lag_pvals = np.asarray(lag_pvals)
+            all_lags = np.argwhere(lag_pvals < alpha).flatten() + 1 #lags start at 1 not 0
+            best_lag = None if len(all_lags)==0 else all_lags[0]
+            if best_lag is not None:
+                best_lag = None if best_lag > lagthresh else best_lag
+            exog_res[col] = [lag_pvals, all_lags, best_lag]
+        return exog_res
 
     def estimate_exogenous_vars(self):
         """
