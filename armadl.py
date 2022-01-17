@@ -7,23 +7,27 @@ from statsmodels.tsa.stattools import grangercausalitytests
 
 
 class ARMADL:
-    def __init__(self, endog, exog=None, dl_param=None, fill_val=0.0):
+    def __init__(self, endog, exog=None, dl_param=None, fill_val=0.0, single_lag=False, gc_params={}):
         """
         ARMADL class, ARMA/ARIMA with distributed lags.
         Args:
             endog: (pd.Series) the target time series.
-            exog: (pd.DataFrame) Exogenous variable(s).
-            dl_param: (int or dict) Distributed lags parameter, see generate_distributed_lags() for details.
-            fill_val: (float or function) fill values for shifted series, see generate_distributed_lags() for details.
+            exog: (pd.DataFrame) Exogenous variable(s). Default: None
+            dl_param: (int or dict) Distributed lags parameter, see generate_distributed_lags() for details. Default: None
+            fill_val: (float or function) fill values for shifted series, see generate_distributed_lags() for details. Default: 0.0
+            single_lag: (boolean) Instead of k distributed lags, generate a single lag. Default: False
+            gc_params: (dict) Parameters for the Granger Causality function (see below).
         """
         self.endog = endog
         self.exog = exog
+        self.gc_params = gc_params
         self.dl_param = dl_param if not isinstance(
-            dl_param, str) else self.pick_dl_granger_causality_test(self.endog, self.exog)
+            dl_param, str) else self.pick_dl_granger_causality_test(self.endog, self.exog, **self.gc_params)
         self.fill_val = fill_val
+        self.single_lag = single_lag
         if self.dl_param is not None:
             self.exog = self.generate_distributed_lags(
-                self.exog, k=self.dl_param, fill_val=self.fill_val)
+                self.exog, k=self.dl_param, fill_val=self.fill_val, single_lag=self.single_lag)
         self.fit_res = None
         self.best_params = None
 
@@ -96,7 +100,7 @@ class ARMADL:
                 return None
 
     @staticmethod
-    def generate_distributed_lags(exog, k=0, fill_val=0.0):
+    def generate_distributed_lags(exog, k=0, fill_val=0.0, single_lag=False):
         """
         Generates distributed lags (DLs) for given exogenous variables.
         Args:
@@ -110,6 +114,7 @@ class ARMADL:
             fill_val: (float or function) After applying lag, how to handle the missing values. Options are:
                       - A floating point number, eg. 0.0, np.nan, 1.5 etc.
                       - Any summary stat or aggregating function eg. np.mean, np.median (assumes numpy is imported as np).
+            single_lag: (boolean) Generate a single lag instead of k distributed lags for the corresponding exogenous variable.
         Returns:
             final_exog: (pd.DataFrame) a dataframe of exogenous variables with distributed lags.
         """
@@ -132,7 +137,10 @@ class ARMADL:
                 raise TypeError("k can only be of type integer or dict!")
 
             if isinstance(tmp_k, int):
-                tmp_k = [*range(0, tmp_k+1)]
+                if single_lag:
+                    tmp_k = [tmp_k]
+                else:
+                    tmp_k = [*range(0, tmp_k+1)]
 
             for lag in tmp_k:
                 var_name = f'{var}_{lag}' if lag > 0 else var
@@ -143,7 +151,7 @@ class ARMADL:
         return final_exog
 
     @staticmethod
-    def pick_dl_granger_causality_test(endog, exog, maxlag=8, htest='ssr_ftest', verbose=False, lagthresh=8, alpha=0.05):
+    def pick_dl_granger_causality_test(endog, exog, maxlag=8, htest='ssr_ftest', verbose=False, lagthresh=8, alpha=0.05, return_best_only=True):
         """
         Picks distributed lags for exogenous variables based on granger causality test.
         Args:
@@ -159,6 +167,8 @@ class ARMADL:
                   The best_lag is the suggested lag to use for the corresponding exogenous variable.
 
         """
+        if exog is None:
+            return None
         exog_res = {}
         for col in exog.columns:
             data = pd.DataFrame((endog, exog[col])).T
@@ -169,7 +179,10 @@ class ARMADL:
             best_lag = None if len(all_lags)==0 else all_lags[0]
             if best_lag is not None:
                 best_lag = None if best_lag > lagthresh else best_lag
-            exog_res[col] = [lag_pvals, all_lags, best_lag]
+            if return_best_only:
+                exog_res[col] = int(best_lag)
+            else:
+                exog_res[col] = [lag_pvals, all_lags, int(best_lag)]
         return exog_res
 
     def estimate_exogenous_vars(self):
