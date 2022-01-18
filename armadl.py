@@ -7,7 +7,7 @@ from statsmodels.tsa.stattools import grangercausalitytests
 
 
 class ARMADL:
-    def __init__(self, endog, exog=None, dl_param=None, fill_val=0.0, single_lag=False, gc_params={}):
+    def __init__(self, endog, exog=None, dl_param=None, fill_val=0.0, single_lag=False, **gc_params):
         """
         ARMADL class, ARMA/ARIMA with distributed lags.
         Args:
@@ -15,7 +15,7 @@ class ARMADL:
             exog: (pd.DataFrame) Exogenous variable(s). Default: None
             dl_param: (int or dict) Distributed lags parameter, see generate_distributed_lags() for details. Default: None
             fill_val: (float or function) fill values for shifted series, see generate_distributed_lags() for details. Default: 0.0
-            single_lag: (boolean) Instead of k distributed lags, generate a single lag. Default: False
+            single_lag: (boolean) Instead of k distributed lags, generate a single lag (see below). Default: False
             gc_params: (dict) Parameters for the Granger Causality function (see below).
         """
         self.endog = endog
@@ -106,15 +106,15 @@ class ARMADL:
         Args:
             exog: (pd.DataFrame) Dataframe containing the exogenous variables. 
                   If a list of lists or numpy array is provided, it will be converted to a pandas dataframe.
-            k: (int or dict) Determines the number of lags in the individual exogenous variables.
+            k: (int or dict) Determines the number of lags in the individual exogenous variables. Default: 0
                k can be integer, dict with integer or list of lags, for example:
                - k = 2 --> apply 0,1,2 lags to every variable
                - k = {'var1':2, 'var2':3, 'rest':1} --> apply 0,1,2 lags to var1, 0,1,2,3 lags to var2 and 0,1 lags to rest of the variables
                - k = {'var1':2, 'var2':[0,1,3], 'rest':1} --> apply 0,1,2 lags to var1, 0,1,3 lags to var2 and 0,1 lags to rest of the variables
             fill_val: (float or function) After applying lag, how to handle the missing values. Options are:
-                      - A floating point number, eg. 0.0, np.nan, 1.5 etc.
+                      - A floating point number, eg. 0.0, np.nan, 1.5 etc. Default: 0.0
                       - Any summary stat or aggregating function eg. np.mean, np.median (assumes numpy is imported as np).
-            single_lag: (boolean) Generate a single lag instead of k distributed lags for the corresponding exogenous variable.
+            single_lag: (boolean) Generate a single k-th lag instead of k distributed lags for the corresponding exogenous variable. Default: False
         Returns:
             final_exog: (pd.DataFrame) a dataframe of exogenous variables with distributed lags.
         """
